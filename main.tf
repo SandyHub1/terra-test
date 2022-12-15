@@ -1,46 +1,65 @@
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = ">=2.99.0"
-    }
-  }
-}
-# Configure the Microsoft Azure Provider
+# Configure the Microsoft Azure provider
 provider "azurerm" {
-  features {}
-}
-# Add this block code if you want to import existing Resource group
-resource "azurerm_resource_group" "rg" {
-  name     = "RG"
-  location = "South Africa North"
-}
-resource "azurerm_service_plan" "service-plan" {
-  name                = "ASP-RG-8c97"
-  location = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  os_type             = "Linux"
-  sku_name            = "S1"
-  tags = {
-          environment = "dev"
-  }
-}
-# Create JAVA app service
-resource "azurerm_linux_web_app" "app-service" {
-  name = "MyAwesomeSuperWebApp"
-  location = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  service_plan_id = azurerm_service_plan.service-plan.id
-  site_config {
-    minimum_tls_version = "1.0"
-    application_stack {
-      java_server         = "TOMCAT"
-      java_version        = "java11"
-      java_server_version = 9.5
-    }
-  }
-tags = {
-    environment = "dev"
-  }
+  features {}
 }
 
+# Create a Resource Group if it doesn’t exist
+resource "azurerm_resource_group" "tfexample" {
+  name     = "my-terraform-rg"
+  location = "West Europe"
+}
+
+# Create a Virtual Network
+resource "azurerm_virtual_network" "tfexample" {
+  name                = "my-terraform-vnet"
+  location            = azurerm_resource_group.tfexample.location
+  resource_group_name = azurerm_resource_group.tfexample.name
+  address_space       = ["10.0.0.0/16"]
+}
+
+# Create a Subnet in the Virtual Network
+resource "azurerm_subnet" "tfexample" {
+  name                 = "my-terraform-subnet"
+  resource_group_name  = azurerm_resource_group.tfexample.name
+  virtual_network_name = azurerm_virtual_network.tfexample.name
+  address_prefixes     = ["10.0.2.0/24"]
+}
+
+# Create a Network Interface
+resource "azurerm_network_interface" "tfexample" {
+  name                = "my-terraform-nic"
+  location            = azurerm_resource_group.tfexample.location
+  resource_group_name = azurerm_resource_group.tfexample.name
+
+  ip_configuration {
+    name                          = "my-terraform-nic-ip-config"
+    subnet_id                     = azurerm_subnet.tfexample.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+
+# Create a Virtual Machine
+resource "azurerm_linux_virtual_machine" "tfexample" {
+  name                            = "my-terraform-vm"
+  location                        = azurerm_resource_group.tfexample.location
+  resource_group_name             = azurerm_resource_group.tfexample.name
+  network_interface_ids           = [azurerm_network_interface.tfexample.id]
+  size                            = "Standard_DS1_v2"
+  computer_name                   = "myvm"
+  admin_username                  = "azureuser"
+  admin_password                  = "Password1234!"
+  disable_password_authentication = false
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "18.04-LTS"
+    version   = "latest"
+  }
+
+  os_disk {
+    name                 = "my-terraform-os-disk"
+    storage_account_type = "Standard_LRS"
+    caching              = "ReadWrite"
+  }
+}
